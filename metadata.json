@@ -1,0 +1,6 @@
+{
+  "name": "PromptForge - Studio Dev IA",
+  "description": "Environnement de développement IA complet pour prototyper, calibrer, tester des schémas JSON, simuler des outils et exporter du code prêt pour la production avec l'API Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
