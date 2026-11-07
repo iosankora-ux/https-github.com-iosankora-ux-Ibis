@@ -22,6 +22,9 @@ import {
   Layers,
   ShieldCheck,
   TrendingUp,
+  Download,
+  FileJson,
+  FileDown,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -86,6 +89,98 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyTab, setHistoryTab] = useState<'list' | 'pie' | 'bar'>('list');
+  const [exportedFormat, setExportedFormat] = useState<'json' | 'log' | null>(null);
+
+  // Export full history as JSON or structured LOG file
+  const handleExportLogs = (format: 'json' | 'log') => {
+    if (history.length === 0) return;
+
+    let content = '';
+    let mimeType = 'text/plain';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `playground-logs-${timestamp}.${format}`;
+
+    if (format === 'json') {
+      content = JSON.stringify(
+        {
+          exportedAt: new Date().toISOString(),
+          totalRuns: history.length,
+          model,
+          logs: history,
+        },
+        null,
+        2
+      );
+      mimeType = 'application/json';
+    } else {
+      content = history
+        .map((log, idx) => {
+          return `================================================================================
+[RUN #${history.length - idx}] - ${log.timestamp}
+ID: ${log.id} | Modèle: ${log.model} | Mode: ${log.mode} | Thinking: ${log.thinkingLevel || 'N/A'}
+Latence Totale: ${log.durationMs}ms | TTFT: ${log.ttftMs ?? Math.round(log.durationMs * 0.35)}ms
+Tokens: Prompt=${log.tokens.prompt} | Complétion=${log.tokens.completion} | Total=${log.tokens.total}
+--------------------------------------------------------------------------------
+PROMPT:
+${log.prompt}
+${log.systemInstruction ? `\nSYSTEM INSTRUCTION:\n${log.systemInstruction}\n` : ''}
+--------------------------------------------------------------------------------
+OUTPUT:
+${log.output}
+================================================================================\n`;
+        })
+        .join('\n');
+      mimeType = 'text/plain';
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setExportedFormat(format);
+    setTimeout(() => setExportedFormat(null), 2500);
+  };
+
+  // Export a single execution log as JSON or LOG
+  const handleExportSingleLog = (item: ExecutionLog, format: 'json' | 'log') => {
+    let content = '';
+    let mimeType = 'text/plain';
+    const filename = `run-${item.id.slice(0, 8)}.${format}`;
+
+    if (format === 'json') {
+      content = JSON.stringify(item, null, 2);
+      mimeType = 'application/json';
+    } else {
+      content = `================================================================================
+EXÉCUTION ${item.id} - ${item.timestamp}
+Modèle: ${item.model} | Latence: ${item.durationMs}ms | TTFT: ${item.ttftMs ?? Math.round(item.durationMs * 0.35)}ms
+Tokens: Prompt=${item.tokens.prompt} | Complétion=${item.tokens.completion} | Total=${item.tokens.total}
+--------------------------------------------------------------------------------
+PROMPT:
+${item.prompt}
+${item.systemInstruction ? `\nINSTRUCTION:\n${item.systemInstruction}\n` : ''}
+--------------------------------------------------------------------------------
+OUTPUT:
+${item.output}
+================================================================================\n`;
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Token distribution calculations for Recharts visualizations
   const tokenStats = useMemo(() => {
@@ -441,56 +536,99 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
         {/* History Panel (collapsible with Recharts token distribution) */}
         {showHistory && (
           <div className="border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100/70 dark:bg-neutral-900/80 p-3 max-h-[380px] overflow-y-auto">
-            {/* History Header & Tab Switcher */}
+            {/* History Header & Tab Switcher & Export Actions */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-neutral-200 dark:border-neutral-800">
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                Historique ({history.length} run{history.length > 1 ? 's' : ''})
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                  Historique ({history.length} run{history.length > 1 ? 's' : ''})
+                </span>
 
-              {history.length > 0 && (
-                <div className="flex items-center gap-1 bg-neutral-200/80 dark:bg-neutral-800 rounded-md p-0.5 text-xs">
-                  <button
-                    onClick={() => setHistoryTab('list')}
-                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                      historyTab === 'list'
-                        ? 'bg-white dark:bg-neutral-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
-                    }`}
-                  >
-                    <List className="w-3 h-3" />
-                    <span>Liste</span>
-                  </button>
-                  <button
-                    onClick={() => setHistoryTab('pie')}
-                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                      historyTab === 'pie'
-                        ? 'bg-white dark:bg-neutral-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
-                    }`}
-                  >
-                    <PieChartIcon className="w-3 h-3" />
-                    <span>Circulaire</span>
-                  </button>
-                  <button
-                    onClick={() => setHistoryTab('bar')}
-                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                      historyTab === 'bar'
-                        ? 'bg-white dark:bg-neutral-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
-                    }`}
-                  >
-                    <BarChart2 className="w-3 h-3" />
-                    <span>Barres</span>
-                  </button>
-                </div>
-              )}
+                {history.length > 0 && (
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <button
+                      onClick={() => handleExportLogs('json')}
+                      title="Exporter l'historique complet au format JSON structuré"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/50 transition-colors shadow-2xs"
+                    >
+                      {exportedFormat === 'json' ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-500" />
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">.JSON téléchargé</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileJson className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
+                          <span>Export .json</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleExportLogs('log')}
+                      title="Exporter l'historique complet au format texte d'analyse .log"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/50 transition-colors shadow-2xs"
+                    >
+                      {exportedFormat === 'log' ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-500" />
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">.LOG téléchargé</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                          <span>Export .log</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
 
-              <button
-                onClick={() => setShowHistory(false)}
-                className="text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
-              >
-                Fermer
-              </button>
+              <div className="flex items-center gap-2">
+                {history.length > 0 && (
+                  <div className="flex items-center gap-1 bg-neutral-200/80 dark:bg-neutral-800 rounded-md p-0.5 text-xs">
+                    <button
+                      onClick={() => setHistoryTab('list')}
+                      className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                        historyTab === 'list'
+                          ? 'bg-white dark:bg-neutral-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
+                          : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+                      }`}
+                    >
+                      <List className="w-3 h-3" />
+                      <span>Liste</span>
+                    </button>
+                    <button
+                      onClick={() => setHistoryTab('pie')}
+                      className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                        historyTab === 'pie'
+                          ? 'bg-white dark:bg-neutral-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
+                          : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+                      }`}
+                    >
+                      <PieChartIcon className="w-3 h-3" />
+                      <span>Circulaire</span>
+                    </button>
+                    <button
+                      onClick={() => setHistoryTab('bar')}
+                      className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                        historyTab === 'bar'
+                          ? 'bg-white dark:bg-neutral-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
+                          : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+                      }`}
+                    >
+                      <BarChart2 className="w-3 h-3" />
+                      <span>Barres</span>
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 px-1 py-0.5"
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
 
             {history.length === 0 ? (
@@ -502,7 +640,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
                 {history.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-3 text-xs p-2 rounded bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700/60 hover:border-cyan-500/50 transition-colors cursor-pointer"
+                    className="flex items-center justify-between gap-3 text-xs p-2 rounded bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700/60 hover:border-cyan-500/50 transition-colors cursor-pointer group"
                     onClick={() => onRestoreHistory(item)}
                     title="Cliquer pour restaurer ce prompt et ces paramètres"
                   >
@@ -532,6 +670,18 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
                       <span className="text-neutral-400 hidden sm:inline" title="Total tokens (Prompt + Complétion)">
                         {item.tokens.total} tok
                       </span>
+
+                      {/* Download single item button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExportSingleLog(item, 'json');
+                        }}
+                        title="Télécharger ce log individuel (.json)"
+                        className="p-1 rounded text-neutral-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors ml-1"
+                      >
+                        <Download className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
                 ))}

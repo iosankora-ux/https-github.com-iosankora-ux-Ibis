@@ -80,6 +80,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Middleware: Vérifie la présence de GEMINI_API_KEY pour toutes les routes IA
+app.use('/api/gemini', (req, res, next) => {
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({
+      error: "Variable d'environnement GEMINI_API_KEY manquante. Veuillez configurer GEMINI_API_KEY dans votre tableau de bord Vercel (Settings > Environment Variables).",
+    });
+  }
+  next();
+});
+
 // Helper to execute generateContent with exponential backoff and automatic model fallback for 503/429 surges
 async function generateWithRetry(params: { model: string; contents: any; config?: any }, maxRetries = 2) {
   let attempt = 0;
@@ -1077,4 +1087,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// In standard Node/Cloud Run environment, start the HTTP listener.
+// When deployed on Vercel, process.env.VERCEL is set, so Vercel Serverless Function wraps this exported Express app.
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
