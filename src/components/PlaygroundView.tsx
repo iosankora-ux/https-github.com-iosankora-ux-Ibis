@@ -337,11 +337,11 @@ ${item.output}
             {/* Save current prompt button */}
             <button
               onClick={onOpenSaveModal}
-              title="Enregistrer ce prompt dans vos favoris localStorage"
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/40 whitespace-nowrap transition-colors font-medium"
+              title="Enregistrer ce prompt comme favori ou nouvelle version (v1, v2...)"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/40 whitespace-nowrap transition-colors font-medium shadow-2xs"
             >
-              <Star className="w-3.5 h-3.5" />
-              <span>Sauvegarder</span>
+              <Star className="w-3.5 h-3.5 text-amber-500" />
+              <span>Sauvegarder / Itérer</span>
             </button>
 
             <span className="text-neutral-300 dark:text-neutral-700 mx-1">|</span>
@@ -419,10 +419,10 @@ ${item.output}
                 type="button"
                 onClick={onOpenSaveModal}
                 className="flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
-                title="Sauvegarder ce prompt dans vos favoris"
+                title="Sauvegarder comme favori ou nouvelle itération (v1, v2...)"
               >
-                <Star className="w-3 h-3" />
-                <span>Sauvegarder en favori</span>
+                <Star className="w-3 h-3 fill-current" />
+                <span>Sauvegarder / Versionner</span>
               </button>
               <div className="text-[11px] text-neutral-400 font-mono hidden sm:block">
                 Syntaxe : {'{{variable}}'}

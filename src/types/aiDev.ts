@@ -84,6 +84,17 @@ export interface BenchmarkResult {
   error?: string;
 }
 
+export interface PromptVersionSnapshot {
+  version: number;
+  updatedAt: string;
+  changeNote?: string;
+  model: ModelName;
+  thinkingLevel: ThinkingLevelOption;
+  systemInstruction: string;
+  prompt: string;
+  variables: Record<string, string>;
+}
+
 export interface SavedPrompt {
   id: string;
   title: string;
@@ -94,6 +105,9 @@ export interface SavedPrompt {
   systemInstruction: string;
   prompt: string;
   variables: Record<string, string>;
+  version: number;
+  changeNote?: string;
+  versions?: PromptVersionSnapshot[];
   createdAt: string;
   updatedAt: string;
 }

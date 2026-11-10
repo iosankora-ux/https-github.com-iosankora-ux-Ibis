@@ -30,15 +30,16 @@ import {
   ContextualRoutingAnalysis,
 } from './types/aiDev';
 import { PROMPT_PRESETS } from './data/presets';
-import { getSavedPrompts, savePrompt, deleteSavedPrompt } from './utils/savedPromptsStorage';
+import { getSavedPrompts, savePrompt, saveNewPromptVersion, deleteSavedPrompt } from './utils/savedPromptsStorage';
 import { AlertCircle, X, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('playground');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // Favorites in localStorage state
+  // Favorites in localStorage state with versioning tracking
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>(() => getSavedPrompts());
+  const [currentLoadedPromptId, setCurrentLoadedPromptId] = useState<string | null>(null);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -238,12 +239,18 @@ export default function App() {
     }
   };
 
-  // Favorites Handlers (localStorage persistence)
-  const handleSaveFavorite = (meta: { title: string; description: string; category: string }) => {
+  // Favorites Handlers (localStorage persistence with v1, v2... versioning)
+  const handleSaveNewFavorite = (meta: {
+    title: string;
+    description: string;
+    category: string;
+    changeNote?: string;
+  }) => {
     const saved = savePrompt({
       title: meta.title,
       description: meta.description,
       category: meta.category,
+      changeNote: meta.changeNote,
       model,
       thinkingLevel,
       systemInstruction,
@@ -251,7 +258,33 @@ export default function App() {
       variables,
     });
     setSavedPrompts(getSavedPrompts());
-    showToast(`Prompt « ${saved.title} » sauvegardé dans vos favoris !`);
+    setCurrentLoadedPromptId(saved.id);
+    showToast(`Prompt « ${saved.title} » (v1) sauvegardé dans vos favoris !`);
+  };
+
+  const handleSavePromptVersion = (
+    targetPromptId: string,
+    meta: {
+      changeNote: string;
+      title?: string;
+      description?: string;
+      category?: string;
+    }
+  ) => {
+    const { updatedPrompts, targetPrompt } = saveNewPromptVersion(targetPromptId, {
+      title: meta.title,
+      description: meta.description,
+      category: meta.category,
+      changeNote: meta.changeNote,
+      model,
+      thinkingLevel,
+      systemInstruction,
+      prompt,
+      variables,
+    });
+    setSavedPrompts(updatedPrompts);
+    setCurrentLoadedPromptId(targetPrompt.id);
+    showToast(`Version v${targetPrompt.version} enregistrée pour « ${targetPrompt.title} » !`);
   };
 
   const handleLoadFavorite = (saved: SavedPrompt) => {
@@ -260,7 +293,8 @@ export default function App() {
     setSystemInstruction(saved.systemInstruction);
     setPrompt(saved.prompt);
     setVariables(saved.variables || {});
-    showToast(`Prompt « ${saved.title} » chargé dans le Playground.`);
+    setCurrentLoadedPromptId(saved.id);
+    showToast(`Prompt « ${saved.title} » (v${saved.version || 1}) chargé dans le Playground.`);
   };
 
   const handleDeleteFavorite = (id: string) => {
@@ -550,17 +584,20 @@ export default function App() {
         )}
       </main>
 
-      {/* Save Prompt Modal */}
+      {/* Save Prompt Modal with Versioning */}
       <SavePromptModal
         isOpen={isSaveModalOpen}
         onClose={() => setIsSaveModalOpen(false)}
-        onSave={handleSaveFavorite}
+        onSaveNew={handleSaveNewFavorite}
+        onSaveVersion={handleSavePromptVersion}
         model={model}
         thinkingLevel={thinkingLevel}
         variableCount={Object.keys(variables).length}
+        existingPrompts={savedPrompts}
+        currentLoadedPromptId={currentLoadedPromptId}
       />
 
-      {/* Favorites Slide-over Drawer */}
+      {/* Favorites Slide-over Drawer with Version History */}
       <FavoritesDrawer
         isOpen={isFavoritesOpen}
         onClose={() => setIsFavoritesOpen(false)}
@@ -568,6 +605,10 @@ export default function App() {
         onLoadPrompt={handleLoadFavorite}
         onDeletePrompt={handleDeleteFavorite}
         onImportPrompts={handleImportFavorites}
+        onOpenNewVersionModal={(targetPrompt) => {
+          setCurrentLoadedPromptId(targetPrompt.id);
+          setIsSaveModalOpen(true);
+        }}
       />
     </div>
   );

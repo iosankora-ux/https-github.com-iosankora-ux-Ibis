@@ -9,11 +9,14 @@ import {
   Check,
   Download,
   Upload,
-  Calendar,
-  Sliders,
-  Sparkles,
+  GitBranch,
+  History,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  Plus,
 } from 'lucide-react';
-import { SavedPrompt } from '../types/aiDev';
+import { SavedPrompt, PromptVersionSnapshot } from '../types/aiDev';
 
 interface FavoritesDrawerProps {
   isOpen: boolean;
@@ -22,6 +25,7 @@ interface FavoritesDrawerProps {
   onLoadPrompt: (prompt: SavedPrompt) => void;
   onDeletePrompt: (id: string) => void;
   onImportPrompts: (prompts: SavedPrompt[]) => void;
+  onOpenNewVersionModal?: (targetPrompt: SavedPrompt) => void;
 }
 
 export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
@@ -31,11 +35,22 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
   onLoadPrompt,
   onDeletePrompt,
   onImportPrompts,
+  onOpenNewVersionModal,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Expanded version history by prompt ID
+  const [expandedHistoryIds, setExpandedHistoryIds] = useState<Record<string, boolean>>({});
+
+  const toggleHistory = (promptId: string) => {
+    setExpandedHistoryIds((prev) => ({
+      ...prev,
+      [promptId]: !prev[promptId],
+    }));
+  };
 
   // Extract unique categories
   const categories = useMemo(() => {
@@ -52,7 +67,8 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
       const matchesSearch =
         p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.prompt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()));
+        (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (p.changeNote && p.changeNote.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCat = selectedCategory === 'all' || p.category === selectedCategory;
       return matchesSearch && matchesCat;
     });
@@ -68,7 +84,7 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(savedPrompts, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `promptforge_favoris_${new Date().toISOString().slice(0, 10)}.json`);
+    downloadAnchor.setAttribute('download', `promptforge_favoris_versionnes_${new Date().toISOString().slice(0, 10)}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -84,12 +100,28 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
         if (Array.isArray(parsed)) {
           onImportPrompts(parsed);
         }
-      } catch (err) {
+      } catch {
         alert('Fichier JSON invalide pour les favoris');
       }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  // Helper to load a past version snapshot into the Playground
+  const handleLoadSnapshot = (parent: SavedPrompt, snapshot: PromptVersionSnapshot) => {
+    const virtualPrompt: SavedPrompt = {
+      ...parent,
+      model: snapshot.model,
+      thinkingLevel: snapshot.thinkingLevel,
+      systemInstruction: snapshot.systemInstruction,
+      prompt: snapshot.prompt,
+      variables: snapshot.variables || {},
+      version: snapshot.version,
+      changeNote: snapshot.changeNote,
+    };
+    onLoadPrompt(virtualPrompt);
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -105,13 +137,13 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
-                <span>Mes Prompts Favoris</span>
+                <span>Prompts Favoris & Versions</span>
                 <span className="text-xs font-mono font-normal text-neutral-400 tabular-nums">
                   ({savedPrompts.length})
                 </span>
               </h2>
               <p className="text-xs text-neutral-500">
-                Stockés localement dans votre navigateur.
+                Suivi chronologique des itérations de prompts (v1, v2, etc.).
               </p>
             </div>
           </div>
@@ -120,7 +152,7 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
             {/* Export JSON */}
             <button
               onClick={handleExportJSON}
-              title="Exporter tous les favoris en JSON"
+              title="Exporter tous les favoris avec leur historique de versions en JSON"
               className="p-1.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
             >
               <Download className="w-4 h-4" />
@@ -153,7 +185,7 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Rechercher un favori par nom, consigne ou mot-clé..."
+              placeholder="Rechercher par nom, mot-clé, changelog ou version..."
               className="w-full text-xs pl-8 pr-3 py-1.5 rounded-md bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
@@ -198,7 +230,7 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
               </p>
               <p className="text-xs max-w-xs text-neutral-500">
                 {savedPrompts.length === 0
-                  ? 'Pour ajouter un favori, rédigez un prompt dans le Playground puis cliquez sur « Sauvegarder en favori ».'
+                  ? 'Pour ajouter un favori, rédigez un prompt dans le Playground puis cliquez sur « Sauvegarder ».'
                   : 'Modifiez les termes de recherche ou sélectionnez une autre catégorie.'}
               </p>
             </div>
@@ -206,20 +238,27 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
             filteredPrompts.map((item) => {
               const varCount = Object.keys(item.variables || {}).length;
               const isConfirming = confirmDeleteId === item.id;
+              const historyCount = item.versions?.length || 0;
+              const isHistoryOpen = !!expandedHistoryIds[item.id];
 
               return (
                 <div
                   key={item.id}
                   className="p-3.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 hover:border-neutral-300 dark:hover:border-neutral-700 transition-all space-y-2.5"
                 >
-                  {/* Top line: title & category */}
+                  {/* Top line: title, version badge & category */}
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h4 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
-                        {item.title}
-                      </h4>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-cyan-700 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-950/80 px-2 py-0.5 rounded text-[11px] font-bold border border-cyan-200 dark:border-cyan-800 shadow-2xs">
+                          v{item.version || 1}
+                        </span>
+                        <h4 className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate">
+                          {item.title}
+                        </h4>
+                      </div>
                       {item.description && (
-                        <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">
+                        <p className="text-xs text-neutral-500 mt-1 line-clamp-2">
                           {item.description}
                         </p>
                       )}
@@ -231,15 +270,25 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
                     )}
                   </div>
 
-                  {/* Clean unboxed metadata with bullet separators */}
+                  {/* Version Changelog Note if present */}
+                  {item.changeNote && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-cyan-800 dark:text-cyan-300 bg-cyan-500/10 dark:bg-cyan-500/15 px-2.5 py-1 rounded border border-cyan-500/20 font-sans">
+                      <GitBranch className="w-3 h-3 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                      <span className="truncate">
+                        <strong>v{item.version} :</strong> {item.changeNote}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Metadata line */}
                   <div className="flex items-center gap-2 text-[11px] text-neutral-500 font-mono flex-wrap">
                     <span className="text-cyan-700 dark:text-cyan-400">{item.model}</span>
                     <span aria-hidden="true">·</span>
                     <span>Thinking: {item.thinkingLevel}</span>
                     <span aria-hidden="true">·</span>
-                    <span>{varCount} variable(s)</span>
+                    <span>{varCount} var(s)</span>
                     <span aria-hidden="true">·</span>
-                    <span>{new Date(item.updatedAt).toLocaleDateString()}</span>
+                    <span>Mis à jour : {new Date(item.updatedAt).toLocaleDateString()}</span>
                   </div>
 
                   {/* Prompt preview */}
@@ -247,13 +296,88 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
                     {item.prompt}
                   </div>
 
-                  {/* Actions */}
-                  <div className="pt-1 flex items-center justify-between gap-2">
+                  {/* Version History Toggle Button if multiple versions exist */}
+                  {historyCount > 0 && (
+                    <div className="pt-1">
+                      <button
+                        onClick={() => toggleHistory(item.id)}
+                        className="flex items-center gap-1.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                      >
+                        <History className="w-3.5 h-3.5 text-cyan-500" />
+                        <span>
+                          {isHistoryOpen ? 'Masquer l’historique des itérations' : `Historique des versions (${historyCount} version${historyCount > 1 ? 's' : ''} antérieure${historyCount > 1 ? 's' : ''})`}
+                        </span>
+                        {isHistoryOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
+
+                      {/* Expandable Version Timeline */}
+                      {isHistoryOpen && (
+                        <div className="mt-2.5 pl-3 border-l-2 border-cyan-500/30 space-y-2 py-1">
+                          {item.versions?.map((snap) => (
+                            <div
+                              key={`snap-${item.id}-v${snap.version}`}
+                              className="p-2.5 rounded-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-xs space-y-1.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                                    v{snap.version}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-neutral-400">
+                                    {new Date(snap.updatedAt).toLocaleDateString()} {new Date(snap.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] font-mono text-cyan-600 dark:text-cyan-400">
+                                  {snap.model}
+                                </span>
+                              </div>
+
+                              {snap.changeNote && (
+                                <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">
+                                  « {snap.changeNote} »
+                                </p>
+                              )}
+
+                              <p className="text-[10px] font-mono text-neutral-500 line-clamp-1 truncate bg-neutral-50 dark:bg-neutral-900/60 p-1 rounded">
+                                {snap.prompt}
+                              </p>
+
+                              <div className="pt-1 flex items-center justify-between gap-2">
+                                <button
+                                  onClick={() => handleCopy(`${item.id}-v${snap.version}`, snap.prompt)}
+                                  className="text-[10px] text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 flex items-center gap-1"
+                                >
+                                  {copiedId === `${item.id}-v${snap.version}` ? (
+                                    <Check className="w-3 h-3 text-emerald-500" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                  <span>Copier v{snap.version}</span>
+                                </button>
+
+                                <button
+                                  onClick={() => handleLoadSnapshot(item, snap)}
+                                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 transition-colors"
+                                  title={`Charger la version v${snap.version} dans le Playground`}
+                                >
+                                  <RotateCcw className="w-2.5 h-2.5 text-cyan-500" />
+                                  <span>Restaurer v{snap.version}</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Main Actions Bar */}
+                  <div className="pt-1.5 flex items-center justify-between gap-2 border-t border-neutral-100 dark:border-neutral-800/80">
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => handleCopy(item.id, item.prompt)}
                         className="flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 rounded transition-colors"
-                        title="Copier le prompt"
+                        title="Copier le prompt actif"
                       >
                         {copiedId === item.id ? (
                           <Check className="w-3.5 h-3.5 text-emerald-500" />
@@ -262,6 +386,20 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
                         )}
                         <span>{copiedId === item.id ? 'Copié' : 'Copier'}</span>
                       </button>
+
+                      {onOpenNewVersionModal && (
+                        <button
+                          onClick={() => {
+                            onOpenNewVersionModal(item);
+                            onClose();
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 rounded transition-colors"
+                          title="Créer une nouvelle itération (v+1) de ce prompt"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Nouvelle version</span>
+                        </button>
+                      )}
 
                       {isConfirming ? (
                         <div className="flex items-center gap-1 text-xs">
@@ -285,7 +423,7 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
                         <button
                           onClick={() => setConfirmDeleteId(item.id)}
                           className="p-1 text-neutral-400 hover:text-red-500 rounded transition-colors"
-                          title="Supprimer des favoris"
+                          title="Supprimer ce favori et toutes ses versions"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -300,7 +438,7 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
                       className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded bg-cyan-600 hover:bg-cyan-500 text-white transition-colors shadow-xs"
                     >
                       <Play className="w-3 h-3 fill-current" />
-                      <span>Charger dans le Playground</span>
+                      <span>Charger v{item.version || 1}</span>
                     </button>
                   </div>
                 </div>
